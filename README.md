@@ -1,5 +1,4 @@
 # Sixtree Xref API documentation version v1
-http://mocksvc.mulesoft.com/mocks/55209f41-93cc-4a7b-a470-f9af3749e479/v1/
 
 ---
 
