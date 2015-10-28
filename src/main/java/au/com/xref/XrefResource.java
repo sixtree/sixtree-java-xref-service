@@ -1,8 +1,7 @@
 
-package au.com.sixtree.xref.service.resource;
+package au.com.xref;
 
-import java.io.Reader;
-
+import javax.sql.DataSource;
 import javax.ws.rs.Consumes;
 import javax.ws.rs.DELETE;
 import javax.ws.rs.GET;
@@ -15,15 +14,34 @@ import javax.ws.rs.QueryParam;
 import javax.ws.rs.core.Response;
 import javax.ws.rs.core.Response.Status;
 
-import au.com.sixtree.xref.XrefOperation;
+import org.apache.log4j.Logger;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.datasource.SingleConnectionDataSource;
+
+import au.com.sixtree.xref.JDBCXrefOperation;
 import au.com.sixtree.xref.model.EntityNotFoundException;
 import au.com.sixtree.xref.model.Relation;
-import au.com.sixtree.xref.model.RelationMarshaller;
 
-@Path("xref")
+@Path("/")
 public class XrefResource {
 
-	private XrefOperation xrefOperation;
+	private static final Logger log = Logger.getLogger(XrefResource.class);
+	private JDBCXrefOperation xrefOperation = new JDBCXrefOperation();
+
+
+    public XrefResource() {
+    	try {
+        	DataSource dataSource = new SingleConnectionDataSource("jdbc:mysql://localhost:3306/xref",
+          	      "some_username",
+          	      "some_password", 
+          	      false);
+
+          	JdbcTemplate jdbcTemplate = new JdbcTemplate(dataSource);
+          	xrefOperation.setJdbcTemplate(jdbcTemplate);
+		} catch (Exception e) {
+			log.error("Could not create Datasource. "+e.getMessage(), e);
+		}
+    }
 
     /**
      * Returns the usage of the API
@@ -31,10 +49,10 @@ public class XrefResource {
      */
     @GET
     @Produces({
-        "application/xml"
+        "text/plain"
     })
-    Response getUsage() {
-    	return Response.ok().build();
+    public Response getUsage() {
+    	return Response.ok("Xref Service is operational.").build();
     }
 
     /**
@@ -46,13 +64,12 @@ public class XrefResource {
     @GET
     @Path("{tenant}")
     @Produces({
-        "application/xml"
+        "text/plain"
     })
-    Response getEntitySetsByTenant(
+    public Response getEntitySetsByTenant(
         @PathParam("tenant")
         String tenant) {
-    	
-    	return Response.ok().build();
+    	return Response.ok("Working with Tenant "+tenant+". This endpoint performs no operations.").build();
     }
 
     /**
@@ -74,7 +91,7 @@ public class XrefResource {
     @Produces({
         "application/xml"
     })
-    Response findRelation(
+    public Response findRelation(
         @PathParam("entitySet")
         String entitySet,
         @PathParam("tenant")
@@ -88,6 +105,7 @@ public class XrefResource {
 	    	Relation relation = xrefOperation.findRelation(entitySet, tenant, endpoint, id);
 	    	return Response.ok(relation).build();
     	} catch (EntityNotFoundException e) {
+    		log.error(e.getMessage(), e);
     		return Response.status(Status.NOT_FOUND).entity(e.getMessage()).build();
     	}
     }
@@ -113,17 +131,17 @@ public class XrefResource {
     @Produces({
         "application/xml"
     })
-    Response createRelation(
+    public Response createRelation(
         @PathParam("entitySet")
         String entitySet,
         @PathParam("tenant")
-        String tenant, Reader entity) {
+        String tenant, Relation relation) {
     	
 		try {
-			Relation relation = RelationMarshaller.unmarshall(entity.toString());
 			relation = xrefOperation.createRelation(entitySet, tenant, relation);
 			return Response.ok(relation).build();
 		} catch (Exception e) {
+			log.error(e.getMessage(), e);
 			return Response.serverError().entity(e.getMessage()).build();
 		}
  }
@@ -151,17 +169,17 @@ public class XrefResource {
     @Produces({
         "application/xml"
     })
-    Response updateRelation(
+    public Response updateRelation(
         @PathParam("entitySet")
         String entitySet,
         @PathParam("tenant")
-        String tenant, Reader entity) {
+        String tenant, Relation relation) {
     	
 		try {
-			Relation relation = RelationMarshaller.unmarshall(entity.toString());
 			relation = xrefOperation.updateRelation(entitySet, tenant, relation);
 			return Response.ok(relation).build();
 		} catch (Exception e) {
+			log.error(e.getMessage(), e);
 			return Response.serverError().entity(e.getMessage()).build();
 		}
 
@@ -182,7 +200,7 @@ public class XrefResource {
     @Produces({
         "application/xml"
     })
-    Response findRelationByCommonId(
+    public Response findRelationByCommonId(
         @PathParam("commonId")
         String commonId,
         @PathParam("entitySet")
@@ -194,6 +212,7 @@ public class XrefResource {
 	    	Relation relation = xrefOperation.findRelationByCommonId(commonId, entitySet, tenant);
 	    	return Response.ok(relation).build();
     	} catch (EntityNotFoundException e) {
+    		log.error(e.getMessage(), e);
     		return Response.status(Status.NOT_FOUND).entity(e.getMessage()).build();
     	}
     }
@@ -215,20 +234,24 @@ public class XrefResource {
     @Produces({
         "application/xml"
     })
-    Response deleteReference(
+    public Response deleteReference(
+		@PathParam("commonId")
+		String commonId,
+		@PathParam("tenant")
+		String tenant,
+		@PathParam("entitySet")
+		String entitySet,
         @PathParam("endpoint")
         String endpoint,
-        @PathParam("commonId")
-        String commonId,
-        @PathParam("entitySet")
-        String entitySet,
-        @PathParam("tenant")
-        String tenant) {
+        @PathParam("endpointId")
+		String endpointId
+        ) {
     	
     	try {
-	    	Relation relation = xrefOperation.deleteReference(endpoint, commonId, entitySet, tenant);
+	    	Relation relation = xrefOperation.deleteReference(commonId, entitySet, tenant, endpoint, endpointId);
 	    	return Response.ok(relation).build();
     	} catch (EntityNotFoundException e) {
+    		log.error(e.getMessage(), e);
     		return Response.status(Status.NOT_FOUND).entity(e.getMessage()).build();
     	}
     }
@@ -253,7 +276,7 @@ public class XrefResource {
     @Produces({
         "application/xml"
     })
-    Response addOrUpdateReference(
+    public Response addOrUpdateReference(
         @PathParam("id")
         String id,
         @PathParam("endpoint")
@@ -269,16 +292,17 @@ public class XrefResource {
 	    	Relation relation = xrefOperation.addOrUpdateReference(id, endpoint, commonId, entitySet, tenant);
 	    	return Response.ok(relation).build();
     	} catch (EntityNotFoundException e) {
+    		log.error(e.getMessage(), e);
     		return Response.status(Status.NOT_FOUND).entity(e.getMessage()).build();
     	}
 
     }
 
-	public XrefOperation getXrefOperation() {
+	public JDBCXrefOperation getXrefOperation() {
 		return xrefOperation;
 	}
 
-	public void setXrefOperation(XrefOperation xrefOperation) {
+	public void setXrefOperation(JDBCXrefOperation xrefOperation) {
 		this.xrefOperation = xrefOperation;
 	}
 
